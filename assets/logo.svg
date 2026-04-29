@@ -1,42 +1,46 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
-  <title id="title">HF Hub v1 Migrator Logo</title>
-  <desc id="desc">A dark rounded-square codemod logo with brackets, an arrow, and v1 marker.</desc>
+  <title id="title">HF Hub v0 to v1 Migrator</title>
+  <desc id="desc">A clear project logo showing HF Hub migration from v0 to v1 with code brackets and an arrow.</desc>
   <defs>
-    <linearGradient id="bg" x1="128" y1="96" x2="896" y2="928" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#081827"/>
-      <stop offset="0.5" stop-color="#0b1020"/>
-      <stop offset="1" stop-color="#111827"/>
+    <linearGradient id="bg" x1="120" y1="92" x2="904" y2="932" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#111827"/>
+      <stop offset="0.58" stop-color="#0b1220"/>
+      <stop offset="1" stop-color="#020617"/>
     </linearGradient>
-    <linearGradient id="accent" x1="208" y1="260" x2="820" y2="764" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#38f8c8"/>
-      <stop offset="0.55" stop-color="#55d7ff"/>
-      <stop offset="1" stop-color="#ffcc4d"/>
+    <linearGradient id="arrow" x1="250" y1="596" x2="774" y2="596" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#34d399"/>
+      <stop offset="1" stop-color="#facc15"/>
     </linearGradient>
-    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="16" result="blur"/>
-      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.22 0 0 0 0 0.95 0 0 0 0 0.80 0 0 0 0.55 0"/>
-      <feMerge>
-        <feMergeNode/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="28" stdDeviation="30" flood-color="#000000" flood-opacity="0.35"/>
     </filter>
   </defs>
 
-  <rect width="1024" height="1024" rx="214" fill="url(#bg)"/>
-  <path d="M158 790C257 566 428 226 866 172" fill="none" stroke="#1f2f46" stroke-width="76" stroke-linecap="round" opacity="0.55"/>
-  <path d="M173 257C374 148 660 128 841 303" fill="none" stroke="#13243a" stroke-width="42" stroke-linecap="round"/>
-  <circle cx="784" cy="226" r="76" fill="#ffcc4d" opacity="0.15"/>
-  <circle cx="252" cy="790" r="104" fill="#38f8c8" opacity="0.10"/>
+  <rect width="1024" height="1024" rx="210" fill="url(#bg)"/>
+  <circle cx="790" cy="214" r="118" fill="#facc15" opacity="0.18"/>
+  <circle cx="215" cy="810" r="140" fill="#34d399" opacity="0.12"/>
 
-  <g filter="url(#glow)" fill="none" stroke="url(#accent)" stroke-width="54" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M386 302 252 430l134 128"/>
-    <path d="M638 302 772 430 638 558"/>
-    <path d="M382 678h212"/>
-    <path d="M596 618l88 60-88 60"/>
+  <g filter="url(#softShadow)">
+    <rect x="156" y="138" width="712" height="748" rx="88" fill="#f8fafc"/>
+    <rect x="156" y="138" width="712" height="132" rx="88" fill="#facc15"/>
+    <path d="M156 226h712v44H156z" fill="#facc15"/>
   </g>
 
-  <g font-family="JetBrains Mono, IBM Plex Mono, Consolas, monospace" font-weight="800">
-    <text x="512" y="505" text-anchor="middle" font-size="132" fill="#f8fafc" letter-spacing="-8">HF</text>
-    <text x="512" y="812" text-anchor="middle" font-size="118" fill="#ffcc4d" letter-spacing="-6">v1</text>
+  <g fill="#111827" font-family="Arial, Helvetica, sans-serif" font-weight="900">
+    <text x="512" y="234" text-anchor="middle" font-size="82" letter-spacing="2">HF HUB</text>
+    <text x="512" y="440" text-anchor="middle" font-size="156" letter-spacing="-6">v0</text>
+    <text x="512" y="760" text-anchor="middle" font-size="178" letter-spacing="-8">v1</text>
+  </g>
+
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M276 578h368" stroke="url(#arrow)" stroke-width="62"/>
+    <path d="M618 510l116 68-116 68" stroke="#facc15" stroke-width="62"/>
+    <path d="M290 506 202 594l88 88" stroke="#111827" stroke-width="42"/>
+    <path d="M734 506l88 88-88 88" stroke="#111827" stroke-width="42"/>
+  </g>
+
+  <g font-family="Arial, Helvetica, sans-serif" font-weight="800">
+    <rect x="308" y="806" width="408" height="58" rx="29" fill="#111827"/>
+    <text x="512" y="849" text-anchor="middle" font-size="38" fill="#f8fafc" letter-spacing="3">CODEMOD</text>
   </g>
 </svg>
