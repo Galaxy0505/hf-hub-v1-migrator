@@ -11,3 +11,4 @@ __pycache__/
 pytest-cache-files-*/
 *.egg-info/
 hf-v1-*.json
+tmp-demo-repo/
