@@ -1,0 +1,13 @@
+.tmp_dora_entry.js
+real-repos/
+submission-*/
+hf-hub-v1-migrator-submission-*.zip
+hf-hub-v1-migrator-submission-*/
+*.zip
+.env
+__pycache__/
+*.py[cod]
+.pytest_cache/
+pytest-cache-files-*/
+*.egg-info/
+hf-v1-*.json

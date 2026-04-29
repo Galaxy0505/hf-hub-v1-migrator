@@ -1,7 +1,0 @@
-.env
-__pycache__/
-*.py[cod]
-.pytest_cache/
-pytest-cache-files-*/
-*.egg-info/
-hf-v1-*.json
