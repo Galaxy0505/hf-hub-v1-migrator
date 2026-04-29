@@ -1,5 +1,9 @@
 # Hugging Face Hub v1 Migrator
 
+<p align="center">
+  <img src="assets/logo.svg" alt="HF Hub v1 Migrator logo" width="180" />
+</p>
+
 LibCST codemod for migrating `huggingface_hub` v0.x Python call sites toward v1.x-safe APIs.
 
 The safety model is intentionally conservative:

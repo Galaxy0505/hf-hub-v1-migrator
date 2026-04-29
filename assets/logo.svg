@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">HF Hub v1 Migrator Logo</title>
+  <desc id="desc">A dark rounded-square codemod logo with brackets, an arrow, and v1 marker.</desc>
+  <defs>
+    <linearGradient id="bg" x1="128" y1="96" x2="896" y2="928" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#081827"/>
+      <stop offset="0.5" stop-color="#0b1020"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="208" y1="260" x2="820" y2="764" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#38f8c8"/>
+      <stop offset="0.55" stop-color="#55d7ff"/>
+      <stop offset="1" stop-color="#ffcc4d"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="16" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.22 0 0 0 0 0.95 0 0 0 0 0.80 0 0 0 0.55 0"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" rx="214" fill="url(#bg)"/>
+  <path d="M158 790C257 566 428 226 866 172" fill="none" stroke="#1f2f46" stroke-width="76" stroke-linecap="round" opacity="0.55"/>
+  <path d="M173 257C374 148 660 128 841 303" fill="none" stroke="#13243a" stroke-width="42" stroke-linecap="round"/>
+  <circle cx="784" cy="226" r="76" fill="#ffcc4d" opacity="0.15"/>
+  <circle cx="252" cy="790" r="104" fill="#38f8c8" opacity="0.10"/>
+
+  <g filter="url(#glow)" fill="none" stroke="url(#accent)" stroke-width="54" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M386 302 252 430l134 128"/>
+    <path d="M638 302 772 430 638 558"/>
+    <path d="M382 678h212"/>
+    <path d="M596 618l88 60-88 60"/>
+  </g>
+
+  <g font-family="JetBrains Mono, IBM Plex Mono, Consolas, monospace" font-weight="800">
+    <text x="512" y="505" text-anchor="middle" font-size="132" fill="#f8fafc" letter-spacing="-8">HF</text>
+    <text x="512" y="812" text-anchor="middle" font-size="118" fill="#ffcc4d" letter-spacing="-6">v1</text>
+  </g>
+</svg>
