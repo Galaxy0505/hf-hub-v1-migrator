@@ -1,0 +1,23 @@
+schema_version: "1.0"
+
+name: "hf-hub-v1-migrator"
+version: "0.1.0"
+description: "Migrate huggingface_hub v0.x Python call sites to v1.x-safe APIs with deterministic LibCST rules and AI review for hard cases."
+author: "Boring AI Hackathon zhy0585@bupt.edu.cn"
+license: "MIT"
+workflow: "workflow.yaml"
+category: "migration"
+
+targets:
+  languages:
+    - "python"
+
+keywords:
+  - "upgrade"
+  - "breaking-change"
+  - "huggingface"
+  - "python"
+
+registry:
+  access: "public"
+  visibility: "public"

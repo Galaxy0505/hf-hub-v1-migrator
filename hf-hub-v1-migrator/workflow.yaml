@@ -1,0 +1,35 @@
+version: "1"
+
+params:
+  schema:
+    target:
+      name: "Target path"
+      description: "File or directory to migrate. Defaults to the workflow run target."
+      type: string
+      default: "."
+    report:
+      name: "Report path"
+      description: "Path for the JSON migration report."
+      type: string
+      default: "hf-v1-migration-report.json"
+    aiFallback:
+      name: "AI fallback"
+      description: "Generate AI suggestions for high-risk findings. Requires HF_MIGRATOR_AI_* environment variables."
+      type: boolean
+      default: false
+
+nodes:
+  - id: migrate-hf-hub-v1
+    name: "Migrate huggingface_hub v0.x call sites to v1.x"
+    type: automatic
+    steps:
+      - name: "Install Python package"
+        run: python -m pip install -e .
+
+      - name: "Run deterministic LibCST migration"
+        if: ${{ params.aiFallback == false }}
+        run: python -m hf_hub_v1_migrator "${{ params.target }}" --write --report "${{ params.report }}"
+
+      - name: "Run deterministic migration with AI review"
+        if: ${{ params.aiFallback == true }}
+        run: python -m hf_hub_v1_migrator "${{ params.target }}" --write --report "${{ params.report }}" --ai-fallback

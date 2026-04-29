@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hf-hub-v1-migrator"
+version = "0.1.0"
+description = "LibCST codemod for migrating huggingface_hub v0.x code to v1.x-safe APIs."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Boring AI Hackathon" }]
+dependencies = ["libcst>=1.4.0"]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0.0"]
+
+[project.scripts]
+hf-hub-v1-migrator = "hf_hub_v1_migrator.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
