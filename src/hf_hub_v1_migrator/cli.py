@@ -28,6 +28,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Call an OpenAI-compatible chat endpoint for high-risk findings and store suggestions in the JSON report.",
     )
     parser.add_argument(
+        "--apply-ai",
+        action="store_true",
+        help="Ask AI for structured JSON patches, run AI risk review, and apply only low-risk bounded local replacements.",
+    )
+    parser.add_argument(
+        "--ai-risk-threshold",
+        type=float,
+        default=0.35,
+        help="Maximum AI reviewer risk score allowed for --apply-ai. Defaults to 0.35.",
+    )
+    parser.add_argument(
         "--env-file",
         type=Path,
         default=Path(".env"),
@@ -41,6 +52,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     ai_config = None
+    if args.apply_ai:
+        args.ai_fallback = True
+
     if args.ai_fallback:
         load_env_file(args.env_file)
         ai_config = AiConfig.from_env()
@@ -58,30 +72,40 @@ def main(argv: list[str] | None = None) -> int:
         source = file_path.read_text(encoding="utf-8")
         result = transform_source(source, path=str(file_path))
         findings = result.findings
+        output_code = result.code
+        ai_applied = 0
 
         if ai_config is not None:
-            findings = add_ai_suggestions(source, findings, ai_config)
+            output_code, findings, ai_applied = add_ai_suggestions(
+                output_code,
+                findings,
+                ai_config,
+                apply_ai=args.apply_ai,
+                risk_threshold=args.ai_risk_threshold,
+            )
 
-        if result.changed and args.diff:
+        changed = output_code != source
+
+        if changed and args.diff:
             sys.stdout.write(
                 "".join(
                     difflib.unified_diff(
                         source.splitlines(keepends=True),
-                        result.code.splitlines(keepends=True),
+                        output_code.splitlines(keepends=True),
                         fromfile=f"{file_path}:before",
                         tofile=f"{file_path}:after",
                     )
                 )
             )
 
-        if result.changed and args.write:
-            atomic_write_text(file_path, result.code)
+        if changed and args.write:
+            atomic_write_text(file_path, output_code)
 
         results.append(
             FileResult(
                 path=str(file_path),
-                changed=result.changed,
-                auto_fixes=result.auto_fixes,
+                changed=changed,
+                auto_fixes=result.auto_fixes + ai_applied,
                 findings=findings,
             )
         )
@@ -99,6 +123,8 @@ def main(argv: list[str] | None = None) -> int:
             "requested": bool(args.ai_fallback),
             "configured": ai_config is not None,
             "model": ai_config.model if ai_config is not None else None,
+            "apply_requested": bool(args.apply_ai),
+            "risk_threshold": args.ai_risk_threshold,
         },
         "files": [result.to_dict() for result in results],
     }

@@ -81,6 +81,19 @@ Then run:
 hf-hub-v1-migrator path/to/repo --report hf-v1-report.json --ai-fallback
 ```
 
+For bounded AI patching, add `--apply-ai`. This asks the model for a strict JSON proposal, then asks a second AI reviewer for a risk score. The patch is applied only when:
+
+- the proposal targets a single function or statement block
+- the AI reviewer returns `decision: "apply"`
+- the risk score is below `--ai-risk-threshold` (default `0.35`)
+- the patched file parses with LibCST and compiles with Python
+
+```bash
+hf-hub-v1-migrator path/to/repo --write --report hf-v1-report.json --ai-fallback --apply-ai
+```
+
+If the reviewer marks the patch as risky, the report keeps the JSON proposal and review result, but the source file is not changed.
+
 If your provider gives the full chat-completions URL, this also works:
 
 ```dotenv
@@ -151,13 +164,14 @@ The remaining `HfFolder` import is left intact unless a dedicated unused-import 
 - Negative fixtures assert unrelated APIs and same-name kwargs are untouched.
 - Every golden output is compiled with `compile(..., mode="exec")`.
 - Idempotency is enforced by running the transform twice.
+- AI patch tests verify low-risk function-local patches can be applied and high-risk proposals are rejected.
 
 ## Validation snapshot
 
 Local fixture suite:
 
 ```text
-8 passed
+14 passed
 ```
 
 AI fallback smoke test:

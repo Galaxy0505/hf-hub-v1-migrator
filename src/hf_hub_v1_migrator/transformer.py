@@ -18,6 +18,13 @@ RENAMED_SYMBOLS = {
     "update_repo_visibility": "update_repo_settings",
 }
 
+CLEANUP_HF_IMPORTS_IF_UNUSED = {
+    "HfFolder",
+    "InferenceApi",
+    "cached_download",
+    "hf_hub_url",
+}
+
 DOWNLOAD_FUNCTIONS = {
     f"{HF_MODULE}.hf_hub_download",
     f"{HF_MODULE}.snapshot_download",
@@ -171,6 +178,13 @@ class ImportCollector(cst.CSTVisitor):
                 if imported == "HTTPError" and local is not None:
                     self.requests_http_error_aliases.add(local)
 
+        if module_name == "requests.exceptions":
+            for alias in node.names:
+                imported = imported_symbol_name(alias)
+                local = local_import_name(alias)
+                if imported == "HTTPError" and local is not None:
+                    self.requests_http_error_aliases.add(local)
+
     def state(self) -> ImportState:
         return ImportState(
             hf_module_aliases=self.hf_module_aliases,
@@ -237,10 +251,15 @@ class HuggingFaceHubTransformer(cst.CSTTransformer):
     def leave_Call(self, original_node: cst.Call, updated_node: cst.Call) -> cst.Call:
         raw_target = dotted_name(original_node.func)
         target = normalize_target(raw_target, self.imports)
+        if target is None:
+            instance_get_token = hffolder_instance_get_token_target(original_node.func, self.imports)
+            if instance_get_token is not None:
+                return self.rewrite_hffolder_instance_get_token(original_node, updated_node, instance_get_token)
         if target is None or not target.startswith(f"{HF_MODULE}."):
             return updated_node
 
         updated = updated_node
+        updated = self.rewrite_cached_download_from_hf_url(original_node, updated, target)
         updated = self.rewrite_call_target(original_node, updated, target)
         updated = self.rewrite_call_args(original_node, updated, target)
         self.flag_high_risk_calls(original_node, target)
@@ -291,6 +310,52 @@ class HuggingFaceHubTransformer(cst.CSTTransformer):
         if not self.needed_hf_imports:
             return updated_node
         return ensure_hf_imports(updated_node, self.needed_hf_imports)
+
+    def rewrite_hffolder_instance_get_token(
+        self, original_node: cst.Call, updated_node: cst.Call, target: str
+    ) -> cst.Call:
+        if target == f"{HF_MODULE}.HfFolder.get_token":
+            self.needed_hf_imports.add("get_token")
+            new_func: cst.BaseExpression = cst.Name("get_token")
+        else:
+            module_alias = target[: -len(".HfFolder.get_token")].split(".")[-1]
+            new_func = cst.Attribute(value=cst.Name(module_alias), attr=cst.Name("get_token"))
+
+        self.auto_fixes += 1
+        self.record(
+            original_node.func,
+            code="HF105",
+            severity="info",
+            rule="hffolder-instance-get-token",
+            message="Replaced HfFolder().get_token() with get_token().",
+            auto_fixed=True,
+        )
+        return updated_node.with_changes(func=new_func)
+
+    def rewrite_cached_download_from_hf_url(
+        self, original_node: cst.Call, updated_node: cst.Call, target: str
+    ) -> cst.Call:
+        if target != f"{HF_MODULE}.cached_download":
+            return updated_node
+        if not is_cached_download_hf_url_call(original_node, self.imports):
+            return updated_node
+
+        self.needed_hf_imports.add("hf_hub_download")
+        self.auto_fixes += 1
+        self.record(
+            original_node.func,
+            code="HF106",
+            severity="info",
+            rule="cached-download-hf-url",
+            message="Replaced cached_download(hf_hub_url(...)) with hf_hub_download(...).",
+            auto_fixed=True,
+        )
+
+        updated_first_value = updated_node.args[0].value
+        if not isinstance(updated_first_value, cst.Call):
+            return updated_node
+        new_args = list(updated_first_value.args) + list(updated_node.args[1:])
+        return updated_node.with_changes(func=cst.Name("hf_hub_download"), args=tuple(new_args))
 
     def rewrite_call_target(
         self, original_node: cst.Call, updated_node: cst.Call, target: str
@@ -491,6 +556,16 @@ class HuggingFaceHubTransformer(cst.CSTTransformer):
                 ai_recommended=True,
             )
 
+        if target == f"{HF_MODULE}.cached_download" and not is_cached_download_hf_url_call(original_node, self.imports):
+            self.record(
+                original_node,
+                code="HF504",
+                severity="warning",
+                rule="cached-download-ai-review",
+                message="cached_download was removed; rewrite to hf_hub_download when the input is a Hub file, otherwise use an explicit HTTP/cache strategy.",
+                ai_recommended=True,
+            )
+
         if target.startswith(f"{HF_MODULE}.HfFolder.") and not target.endswith(".get_token"):
             self.record(
                 original_node,
@@ -557,6 +632,30 @@ def replace_leaf_attr_or_name(
     return updated_func
 
 
+def hffolder_instance_get_token_target(func: cst.BaseExpression, imports: ImportState) -> str | None:
+    if not isinstance(func, cst.Attribute) or func.attr.value != "get_token":
+        return None
+    if not isinstance(func.value, cst.Call):
+        return None
+
+    constructor = normalize_target(dotted_name(func.value.func), imports)
+    if constructor == f"{HF_MODULE}.HfFolder":
+        return f"{HF_MODULE}.HfFolder.get_token"
+    if constructor is not None and constructor.endswith(".HfFolder"):
+        return f"{constructor}.get_token"
+    return None
+
+
+def is_cached_download_hf_url_call(call: cst.Call, imports: ImportState) -> bool:
+    if not call.args:
+        return False
+    first_arg = call.args[0]
+    if first_arg.star or first_arg.keyword is not None or not isinstance(first_arg.value, cst.Call):
+        return False
+    inner_target = normalize_target(dotted_name(first_arg.value.func), imports)
+    return inner_target == f"{HF_MODULE}.hf_hub_url"
+
+
 def call_has_multiline_args(call: cst.Call) -> bool:
     return any(
         isinstance(arg.comma, cst.Comma)
@@ -618,6 +717,69 @@ def ensure_hf_imports(module: cst.Module, imports: Iterable[str]) -> cst.Module:
     return module.with_changes(body=tuple(body))
 
 
+class NameUsageCollector(cst.CSTVisitor):
+    def __init__(self) -> None:
+        self.used: set[str] = set()
+        self._import_depth = 0
+
+    def visit_Import(self, node: cst.Import) -> bool | None:
+        self._import_depth += 1
+        return None
+
+    def leave_Import(self, original_node: cst.Import) -> None:
+        self._import_depth -= 1
+
+    def visit_ImportFrom(self, node: cst.ImportFrom) -> bool | None:
+        self._import_depth += 1
+        return None
+
+    def leave_ImportFrom(self, original_node: cst.ImportFrom) -> None:
+        self._import_depth -= 1
+
+    def visit_Name(self, node: cst.Name) -> None:
+        if self._import_depth == 0:
+            self.used.add(node.value)
+
+
+class UnusedHfImportCleaner(cst.CSTTransformer):
+    def __init__(self, used_names: set[str]) -> None:
+        self.used_names = used_names
+
+    def leave_SimpleStatementLine(
+        self, original_node: cst.SimpleStatementLine, updated_node: cst.SimpleStatementLine
+    ) -> cst.BaseStatement | cst.RemovalSentinel:
+        if len(updated_node.body) != 1 or not isinstance(updated_node.body[0], cst.ImportFrom):
+            return updated_node
+
+        import_from = updated_node.body[0]
+        if dotted_name(import_from.module) != HF_MODULE or not isinstance(import_from.names, tuple):
+            return updated_node
+
+        aliases: list[cst.ImportAlias] = []
+        for alias in import_from.names:
+            imported = imported_symbol_name(alias)
+            local = local_import_name(alias)
+            if (
+                imported in CLEANUP_HF_IMPORTS_IF_UNUSED
+                and local is not None
+                and local not in self.used_names
+            ):
+                continue
+            aliases.append(alias)
+
+        if not aliases:
+            return cst.RemoveFromParent()
+        return updated_node.with_changes(body=[import_from.with_changes(names=tuple(aliases))])
+
+
+def cleanup_unused_hf_imports(code: str) -> str:
+    module = cst.parse_module(code)
+    collector = NameUsageCollector()
+    module.visit(collector)
+    cleaned = module.visit(UnusedHfImportCleaner(collector.used))
+    return cleaned.code
+
+
 def extract_single_import_from(statement: cst.BaseStatement) -> cst.ImportFrom | None:
     if not isinstance(statement, cst.SimpleStatementLine) or len(statement.body) != 1:
         return None
@@ -659,7 +821,7 @@ def transform_source(source: str, path: str = "<string>") -> MigrationResult:
     wrapper = MetadataWrapper(module)
     transformer = HuggingFaceHubTransformer(path=path, imports=collector.state())
     updated = wrapper.visit(transformer)
-    code = updated.code
+    code = cleanup_unused_hf_imports(updated.code)
 
     return MigrationResult(
         code=code,

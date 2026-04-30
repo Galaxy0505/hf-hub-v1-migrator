@@ -1,6 +1,7 @@
 param(
     [string]$Python = "python",
     [switch]$AiFallback,
+    [switch]$ApplyAi,
     [string]$EnvFile = ""
 )
 
@@ -90,9 +91,13 @@ if ($AiFallback) {
     Write-Host ""
     Write-Host "7) AI fallback for Repository(...) review case"
     Write-Host "------------------------------------------------------------"
-    & $Python -m hf_hub_v1_migrator $aiFile --report $aiReport --ai-fallback --env-file $EnvFile
+    $aiArgs = @("-m", "hf_hub_v1_migrator", $aiFile, "--report", $aiReport, "--ai-fallback", "--env-file", $EnvFile)
+    if ($ApplyAi) {
+        $aiArgs += "--apply-ai"
+    }
+    & $Python @aiArgs
     if ($LASTEXITCODE -ne 0) { throw "AI fallback run failed." }
-    & $Python -c "import json; data=json.load(open(r'$aiReport', encoding='utf-8')); f=data['files'][0]['findings'][0]; print('env_file =', r'$EnvFile'); print('ai_configured =', data['ai_fallback']['configured']); print('finding =', f['code'], f['rule']); print('ai_suggestion_generated =', bool(f.get('ai_suggestion'))); print('ai_suggestion_preview ='); print((f.get('ai_suggestion') or '')[:700])"
+    & $Python -c "import json; data=json.load(open(r'$aiReport', encoding='utf-8')); f=data['files'][0]['findings'][0]; print('env_file =', r'$EnvFile'); print('ai_configured =', data['ai_fallback']['configured']); print('apply_ai =', data['ai_fallback'].get('apply_requested')); print('finding =', f['code'], f['rule']); print('ai_suggestion_generated =', bool(f.get('ai_suggestion'))); print('ai_proposal_action =', (f.get('ai_proposal') or {}).get('action')); print('ai_review_decision =', (f.get('ai_review') or {}).get('decision')); print('ai_review_risk =', (f.get('ai_review') or {}).get('risk')); print('ai_applied =', f.get('ai_applied')); print('ai_apply_reason =', f.get('ai_apply_reason')); print('ai_suggestion_preview ='); print((f.get('ai_suggestion') or '')[:500])"
     if ($LASTEXITCODE -ne 0) { throw "AI report summary failed." }
 }
 

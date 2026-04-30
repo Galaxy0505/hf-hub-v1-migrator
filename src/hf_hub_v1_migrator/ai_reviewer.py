@@ -8,6 +8,8 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+import libcst as cst
+
 from .report import Finding
 
 
@@ -102,19 +104,131 @@ Relevant code context:
 """
 
 
-def add_ai_suggestions(source: str, findings: list[Finding], config: AiConfig) -> list[Finding]:
+def build_proposal_prompt(finding: Finding, code_context: str) -> str:
+    return f"""You are an AI codemod proposal agent for migrating Python code to huggingface_hub v1.x.
+
+Return ONLY valid JSON, with no markdown fences and no extra text.
+
+Schema:
+{{
+  "action": "replace_block" | "manual_review",
+  "target": {{
+    "type": "function" | "statement",
+    "line": {finding.line}
+  }},
+  "replacement": "Python code for the replacement block, or empty string for manual_review",
+  "summary": "one sentence",
+  "assumptions": ["short assumption"],
+  "risk_factors": ["short risk factor"]
+}}
+
+Rules:
+- Replace only the smallest enclosing function or statement block shown in the context.
+- Preserve the original function signature when possible.
+- Do not modify unrelated code.
+- If the correct migration depends on unknown runtime behavior, choose manual_review.
+- For Repository(...):
+  - use snapshot_download for read/download intent
+  - use HfApi().upload_file for a single-file upload
+  - use HfApi().upload_folder for folder/model-directory push workflows
+
+Finding:
+- code: {finding.code}
+- rule: {finding.rule}
+- message: {finding.message}
+
+Code context:
+```python
+{code_context}
+```
+"""
+
+
+def build_review_prompt(finding: Finding, proposal: dict, code_context: str) -> str:
+    return f"""You are an AI codemod risk reviewer. Review the proposed local patch for a huggingface_hub v1 migration.
+
+Return ONLY valid JSON, with no markdown fences and no extra text.
+
+Schema:
+{{
+  "decision": "apply" | "manual_review",
+  "risk": 0.0,
+  "reason": "short reason",
+  "required_human_checks": ["short check"]
+}}
+
+Decision rules:
+- Use "apply" only when the patch is local, syntax-safe, and behavior-preserving with low ambiguity.
+- Use "manual_review" when behavior depends on runtime state, unknown repo type, side effects, or broad control-flow changes.
+- Risk must be between 0 and 1.
+
+Finding:
+{json.dumps(finding.to_dict(), ensure_ascii=False)}
+
+Proposal:
+{json.dumps(proposal, ensure_ascii=False)}
+
+Original context:
+```python
+{code_context}
+```
+"""
+
+
+def add_ai_suggestions(
+    source: str,
+    findings: list[Finding],
+    config: AiConfig,
+    *,
+    apply_ai: bool = False,
+    risk_threshold: float = 0.35,
+) -> tuple[str, list[Finding], int]:
+    code = source
     updated: list[Finding] = []
+    applied = 0
     for finding in findings:
         if not finding.ai_recommended:
             updated.append(finding)
             continue
-        prompt = build_finding_prompt(finding, extract_context(source, finding.line))
+        context = extract_context(code, finding.line)
+        prompt = build_finding_prompt(finding, context)
         try:
             suggestion = call_openai_compatible(config, prompt)
         except (HTTPError, URLError, TimeoutError, OSError, ValueError) as exc:
             suggestion = f"AI request failed: {exc}"
-        updated.append(replace(finding, ai_suggestion=suggestion))
-    return updated
+
+        proposal = None
+        review = None
+        ai_applied = False
+        apply_reason = None
+
+        if apply_ai:
+            try:
+                proposal = request_json(config, build_proposal_prompt(finding, context))
+                review = request_json(config, build_review_prompt(finding, proposal, context))
+                code, ai_applied, apply_reason = maybe_apply_proposal(
+                    code,
+                    finding,
+                    proposal,
+                    review,
+                    risk_threshold=risk_threshold,
+                )
+                if ai_applied:
+                    applied += 1
+            except (HTTPError, URLError, TimeoutError, OSError, ValueError, cst.ParserSyntaxError) as exc:
+                apply_reason = f"AI apply skipped: {exc}"
+
+        updated.append(
+            replace(
+                finding,
+                ai_suggestion=suggestion,
+                ai_proposal=proposal,
+                ai_review=review,
+                ai_applied=ai_applied,
+                ai_apply_reason=apply_reason,
+            )
+        )
+    return code, updated, applied
 
 
 def extract_context(source: str, line: int, radius: int = 25) -> str:
@@ -156,6 +270,105 @@ def call_openai_compatible(config: AiConfig, prompt: str) -> str:
         return data["choices"][0]["message"]["content"].strip()
     except (KeyError, IndexError, TypeError) as exc:
         raise ValueError(f"Unexpected AI response shape: {data}") from exc
+
+
+def request_json(config: AiConfig, prompt: str) -> dict:
+    raw = call_openai_compatible(config, prompt)
+    cleaned = strip_json_fence(raw)
+    data = json.loads(cleaned)
+    if not isinstance(data, dict):
+        raise ValueError("AI response JSON must be an object")
+    return data
+
+
+def strip_json_fence(raw: str) -> str:
+    text = raw.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+    return text
+
+
+def maybe_apply_proposal(
+    source: str,
+    finding: Finding,
+    proposal: dict,
+    review: dict,
+    *,
+    risk_threshold: float,
+) -> tuple[str, bool, str]:
+    decision = review.get("decision")
+    risk = review.get("risk")
+    if decision != "apply":
+        return source, False, "review decision requires manual review"
+    if not isinstance(risk, (int, float)) or float(risk) > risk_threshold:
+        return source, False, f"risk {risk!r} exceeds threshold {risk_threshold}"
+    if proposal.get("action") != "replace_block":
+        return source, False, "proposal is not replace_block"
+    replacement = proposal.get("replacement")
+    if not isinstance(replacement, str) or not replacement.strip():
+        return source, False, "proposal has no replacement code"
+
+    target = proposal.get("target") if isinstance(proposal.get("target"), dict) else {}
+    target_type = target.get("type")
+    if target_type not in {"function", "statement"}:
+        return source, False, "unsupported proposal target type"
+
+    new_source = replace_local_block(source, finding.line, replacement, target_type=target_type)
+    cst.parse_module(new_source)
+    compile(new_source, filename=finding.path, mode="exec")
+    return new_source, True, "applied bounded AI patch"
+
+
+def replace_local_block(source: str, line: int, replacement: str, *, target_type: str) -> str:
+    module = cst.parse_module(source)
+    locator = BlockLocator(line=line, target_type=target_type)
+    wrapper = cst.metadata.MetadataWrapper(module)
+    wrapper.visit(locator)
+    if locator.range is None:
+        raise ValueError(f"Could not locate enclosing {target_type} block for line {line}")
+
+    start = locator.range.start.line
+    end = locator.range.end.line
+    original_lines = source.splitlines(keepends=True)
+    newline = "\r\n" if any(part.endswith("\r\n") for part in original_lines) else "\n"
+    replacement_lines = replacement.strip("\n").splitlines()
+    replacement_text = newline.join(replacement_lines) + newline
+    return "".join(original_lines[: start - 1]) + replacement_text + "".join(original_lines[end:])
+
+
+class BlockLocator(cst.CSTVisitor):
+    METADATA_DEPENDENCIES = (cst.metadata.PositionProvider,)
+
+    def __init__(self, *, line: int, target_type: str) -> None:
+        self.line = line
+        self.target_type = target_type
+        self.range: cst.metadata.CodeRange | None = None
+
+    def visit_FunctionDef(self, node: cst.FunctionDef) -> bool | None:
+        if self.target_type != "function":
+            return None
+        code_range = self.get_metadata(cst.metadata.PositionProvider, node)
+        if code_range.start.line <= self.line <= code_range.end.line:
+            if self.range is None or span_size(code_range) < span_size(self.range):
+                self.range = code_range
+        return None
+
+    def visit_SimpleStatementLine(self, node: cst.SimpleStatementLine) -> bool | None:
+        if self.target_type != "statement":
+            return None
+        code_range = self.get_metadata(cst.metadata.PositionProvider, node)
+        if code_range.start.line <= self.line <= code_range.end.line:
+            self.range = code_range
+        return None
+
+
+def span_size(code_range: cst.metadata.CodeRange) -> int:
+    return code_range.end.line - code_range.start.line
 
 
 def chat_completions_url(base_url: str) -> str:

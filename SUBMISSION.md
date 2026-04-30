@@ -10,6 +10,7 @@ Migrate Python projects from `huggingface_hub` v0.x call sites to v1.x-compatibl
 
 - deterministic LibCST rewrites for high-confidence API changes
 - AI suggestions only for semantic migrations that are unsafe to rewrite blindly
+- optional AI JSON patch proposals with a second AI risk review before any bounded local application
 - structured JSON report for auditability
 
 ## Why this fits Boring AI
@@ -31,7 +32,7 @@ This is not a chatbot wrapper. The codemod uses concrete syntax tree transformat
 
 ## AI-assisted review
 
-AI is triggered for high-risk findings and writes suggestions to the JSON report. It does not overwrite source files.
+AI is triggered for high-risk findings and writes suggestions to the JSON report. With `--apply-ai`, the first model must return a strict JSON proposal and a second AI reviewer must approve the patch with a low risk score. Even then, the tool only replaces one local function or statement block and verifies the result with LibCST and Python `compile()`.
 
 Current review-only cases:
 
@@ -46,7 +47,7 @@ Current review-only cases:
 Local fixture suite:
 
 ```text
-8 passed
+14 passed
 ```
 
 AI fallback smoke test:
@@ -55,6 +56,8 @@ AI fallback smoke test:
 1 Repository(...) finding
 ai_fallback.configured = true
 ai_suggestion generated = true
+structured proposal/review generated = true
+high-risk Repository(...) proposal held for manual review when reviewer risk was high
 ```
 
 Real project dry-run:
@@ -91,6 +94,8 @@ hf-hub-v1-migrator path/to/repo --report hf-v1-report.json --ai-fallback
 ## Safety boundaries
 
 - The AI path is review-only.
+- `--apply-ai` is opt-in and bounded to local block replacement.
+- AI output must pass JSON schema, risk review, LibCST parsing, and Python compilation.
 - Low-confidence code is reported instead of rewritten.
 - Deterministic output is idempotent in tests.
 - Golden outputs are compiled with `compile(..., mode="exec")`.

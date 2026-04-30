@@ -19,6 +19,10 @@ class Finding:
     auto_fixed: bool = False
     ai_recommended: bool = False
     ai_suggestion: str | None = None
+    ai_proposal: dict[str, Any] | None = None
+    ai_review: dict[str, Any] | None = None
+    ai_applied: bool = False
+    ai_apply_reason: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
