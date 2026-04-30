@@ -14,6 +14,13 @@ $report = Join-Path $root "hf-v1-demo-report.json"
 $aiReport = Join-Path $root "hf-v1-ai-demo-report.json"
 $deterministicFile = Join-Path $demoWork "model_download.py"
 $aiFile = Join-Path $demoWork "push_model.py"
+$srcPath = Join-Path $root "src"
+
+if ($env:PYTHONPATH) {
+    $env:PYTHONPATH = "$srcPath;$env:PYTHONPATH"
+} else {
+    $env:PYTHONPATH = $srcPath
+}
 
 if (-not $EnvFile) {
     $rootEnv = Join-Path $root ".env"
@@ -38,12 +45,9 @@ if (Test-Path -LiteralPath $aiReport) {
 }
 
 Write-Host ""
-Write-Host "0) Install local package for this Python"
+Write-Host "0) Use local package source"
 Write-Host "------------------------------------------------------------"
-& $Python -m pip install -q -e $root
-if ($LASTEXITCODE -ne 0) {
-    throw "Failed to install hf-hub-v1-migrator into the selected Python. Try passing -Python with a working Python executable."
-}
+Write-Host "PYTHONPATH = $srcPath"
 
 Copy-Item -LiteralPath $demoSource -Destination $demoWork -Recurse
 

@@ -14,7 +14,7 @@ The safety model is intentionally conservative:
 
 ## Why this exists
 
-`huggingface_hub` v1.0 switches important internals from `requests`/git-oriented workflows to HTTPX-based APIs. The official migration guide documents the changes, but large AI projects still need repeatable source migration, review reports, and safe handling of ambiguous cases.
+`huggingface_hub` v1.0 switches important internals from `requests`/git-oriented workflows to HTTPX-based APIs. The [official migration guide](https://huggingface.co/docs/huggingface_hub/concepts/migration) documents the changes, but large AI projects still need repeatable source migration, review reports, and safe handling of ambiguous cases.
 
 This project targets the Boring AI pattern: deterministic CST rules first, AI fallback only for low-confidence blocks.
 
@@ -28,10 +28,15 @@ This project targets the Boring AI pattern: deterministic CST rules first, AI fa
 | `hf_hub_download(..., local_dir_use_symlinks=...)` | argument removed |
 | `InferenceApi(...)` | `InferenceClient(...)` |
 | `update_repo_visibility(...)` | `update_repo_settings(...)` |
+| locally constructed `HfApi()` instance methods | selected method/kwarg migrations |
 | `HfFolder.get_token()` | `get_token()` |
 | `except requests.HTTPError` around HF calls | `except HfHubHttpError` |
 | `login(write_permission=...)` | argument removed |
 | `login(new_session=True/False)` | `skip_if_logged_in=False/True` |
+| single `list_models(task/library/language/tags=...)` filter | `list_models(filter=...)` |
+| `build_hf_headers(is_write_action=...)` | argument removed |
+| `AsyncInferenceClient(trust_env=True)` | argument removed |
+| `constants.hf_cache_home` | `constants.HF_HOME` |
 
 ## Review-only findings
 
@@ -39,9 +44,11 @@ These are intentionally not auto-fixed:
 
 - `Repository(...)`: requires semantic migration to `snapshot_download`, `HfApi.upload_file`, or `HfApi.upload_folder`.
 - `**kwargs` passed into HF calls: may hide removed keys such as `use_auth_token`.
-- `list_models(library=..., task=..., tags=...)`: removing filters can broaden results.
+- combined `list_models(library=..., task=..., tags=...)` filters: combining filters incorrectly can change results.
 - `configure_http_backend(...)`: v1 uses HTTPX client factories.
 - `HfFolder.save_token()` / `HfFolder.delete_token()`: requires login/logout intent detection.
+- `AsyncInferenceClient(trust_env=False)` or dynamic `trust_env`: may require explicit HTTPX client factory configuration.
+- `get_token_permission(...)`: removed in v1.x; permission-dependent token logic needs human review.
 
 ## Usage
 
@@ -121,13 +128,13 @@ path = hf_hub_download("bert-base-uncased", "config.json", use_auth_token=token)
 After:
 
 ```python
-from huggingface_hub import HfFolder, hf_hub_download, get_token
+from huggingface_hub import hf_hub_download, get_token
 
 token = get_token()
 path = hf_hub_download("bert-base-uncased", "config.json", token=token)
 ```
 
-The remaining `HfFolder` import is left intact unless a dedicated unused-import cleanup pass is run. That is deliberate: this codemod avoids deleting imports unless it can prove the import is fully unused.
+The cleanup pass removes migrated Hugging Face imports only when it can prove the local name is unused.
 
 ## Report shape
 
@@ -171,7 +178,7 @@ The remaining `HfFolder` import is left intact unless a dedicated unused-import 
 Local fixture suite:
 
 ```text
-14 passed
+26 passed
 ```
 
 AI fallback smoke test:
@@ -182,14 +189,16 @@ ai_fallback.configured = true
 ai_suggestion generated = true
 ```
 
-Real project dry-run: `datasets==2.14.0` source distribution from PyPI.
+Real package benchmark:
 
 ```text
-156 Python files scanned
-2 files changed
-2 deterministic fixes
-0 AI-review noise after restricting dynamic **kwargs checks to known high-risk APIs
-156 transformed modules compile successfully in memory
+sentence-transformers==2.2.2, peft==0.4.0, diffusers==0.16.1 source distributions
+315 Python files scanned
+11 files changed
+30 deterministic fixes
+8 AI/manual review findings
+315 transformed modules compile successfully in memory
+0 syntax failures
 ```
 
 Representative diff:
@@ -205,3 +214,9 @@ Representative diff:
 ## Codemod workflow
 
 The root `workflow.yaml` wraps the Python engine so the same migration can run as a Codemod workflow package.
+
+For repeatable scoring evidence:
+
+```bash
+python scripts/benchmark_coverage.py path/to/package-a path/to/package-b --output hf-v1-benchmark-report.json
+```

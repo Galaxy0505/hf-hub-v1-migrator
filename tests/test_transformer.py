@@ -46,8 +46,36 @@ def test_cached_download_hf_url_is_rewritten() -> None:
     assert_golden("cached_download_hf_url")
 
 
+def test_cached_download_hf_url_submodule_import_is_rewritten() -> None:
+    assert_golden("cached_download_submodule_hf_url")
+
+
 def test_requests_exceptions_http_error_is_rewritten_in_hf_try_block() -> None:
     assert_golden("requests_exceptions_http_error")
+
+
+def test_hfapi_instance_methods_are_rewritten_after_local_constructor() -> None:
+    assert_golden("hfapi_instance_methods")
+
+
+def test_list_models_single_removed_filter_is_rewritten() -> None:
+    assert_golden("list_models_single_filter")
+
+
+def test_build_hf_headers_is_write_action_is_removed() -> None:
+    assert_golden("build_hf_headers_is_write_action")
+
+
+def test_async_inference_client_trust_env_true_is_removed() -> None:
+    assert_golden("async_inference_trust_env")
+
+
+def test_constants_hf_cache_home_is_rewritten() -> None:
+    assert_golden("constants_hf_cache_home")
+
+
+def test_constants_hf_cache_home_direct_import_is_rewritten() -> None:
+    assert_golden("constants_hf_cache_home_direct_import")
 
 
 def test_requests_http_error_is_only_rewritten_in_hf_try_block() -> None:
@@ -78,6 +106,31 @@ def test_cached_download_url_is_reported_not_rewritten() -> None:
     assert any(finding.code == "HF504" and finding.ai_recommended for finding in result.findings)
 
 
+def test_cached_download_url_kwargs_are_reported_not_partially_rewritten() -> None:
+    before = read_fixture("cached_download_kwargs_report_only", "before.py")
+    result = transform_source(before, path="cached_download_kwargs_report_only/before.py")
+
+    assert result.code == before
+    assert result.auto_fixes == 0
+    assert any(finding.code == "HF504" and finding.ai_recommended for finding in result.findings)
+
+
+def test_list_models_combined_removed_filters_are_reported_not_rewritten() -> None:
+    before = read_fixture("list_models_combined_review_only", "before.py")
+    result = transform_source(before, path="list_models_combined_review_only/before.py")
+
+    assert result.code == before
+    assert sum(1 for finding in result.findings if finding.code == "HF402") == 2
+
+
+def test_get_token_permission_is_reported_not_rewritten() -> None:
+    before = read_fixture("get_token_permission_report_only", "before.py")
+    result = transform_source(before, path="get_token_permission_report_only/before.py")
+
+    assert result.code == before
+    assert any(finding.code == "HF505" and finding.ai_recommended for finding in result.findings)
+
+
 def test_negative_same_keyword_non_hf_call_is_unchanged() -> None:
     before = read_fixture("negative_non_hf_keyword", "before.py")
     result = transform_source(before, path="negative_non_hf_keyword/before.py")
@@ -90,6 +143,22 @@ def test_negative_same_keyword_non_hf_call_is_unchanged() -> None:
 def test_negative_requests_http_error_without_hf_call_is_unchanged() -> None:
     before = read_fixture("negative_requests_exception", "before.py")
     result = transform_source(before, path="negative_requests_exception/before.py")
+
+    assert result.code == before
+    assert result.auto_fixes == 0
+
+
+def test_negative_reassigned_hfapi_variable_is_unchanged() -> None:
+    before = read_fixture("negative_hfapi_reassigned", "before.py")
+    result = transform_source(before, path="negative_hfapi_reassigned/before.py")
+
+    assert result.code == before
+    assert result.auto_fixes == 0
+
+
+def test_negative_hf_cache_home_shadow_is_not_rewritten() -> None:
+    before = read_fixture("negative_hf_cache_home_shadow", "before.py")
+    result = transform_source(before, path="negative_hf_cache_home_shadow/before.py")
 
     assert result.code == before
     assert result.auto_fixes == 0

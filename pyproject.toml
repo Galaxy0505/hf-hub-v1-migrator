@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hf-hub-v1-migrator"
-version = "0.1.0"
+version = "0.1.1"
 description = "LibCST codemod for migrating huggingface_hub v0.x code to v1.x-safe APIs."
 readme = "README.md"
 requires-python = ">=3.9"

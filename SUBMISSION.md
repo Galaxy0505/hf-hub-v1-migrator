@@ -25,10 +25,15 @@ This is not a chatbot wrapper. The codemod uses concrete syntax tree transformat
 - `hf_hub_download(..., local_dir_use_symlinks=...)` -> removed argument
 - `InferenceApi(...)` -> `InferenceClient(...)`
 - `update_repo_visibility(...)` -> `update_repo_settings(...)`
+- selected locally constructed `HfApi()` instance methods, including `use_auth_token=` and `update_repo_visibility(...)`
 - `HfFolder.get_token()` -> `get_token()`
 - `except requests.HTTPError` around Hugging Face Hub calls -> `except HfHubHttpError`
 - `login(write_permission=...)` -> removed argument
 - `login(new_session=True/False)` -> `skip_if_logged_in=False/True`
+- single `list_models(task/library/language/tags=...)` filter -> `filter=...`
+- `build_hf_headers(is_write_action=...)` -> removed argument
+- `AsyncInferenceClient(trust_env=True)` -> removed argument
+- `constants.hf_cache_home` -> `constants.HF_HOME`
 
 ## AI-assisted review
 
@@ -38,16 +43,18 @@ Current review-only cases:
 
 - `Repository(...)`, because migration depends on upload/download intent
 - dynamic `**kwargs` passed to known high-risk Hugging Face Hub APIs
-- changed `list_models(...)` filters
+- combined `list_models(...)` filters
 - `configure_http_backend(...)`
 - non-trivial `HfFolder` token flows
+- dynamic or false `AsyncInferenceClient(trust_env=...)`
+- removed `get_token_permission(...)` permission logic
 
 ## Validation
 
 Local fixture suite:
 
 ```text
-14 passed
+26 passed
 ```
 
 AI fallback smoke test:
@@ -60,15 +67,16 @@ structured proposal/review generated = true
 high-risk Repository(...) proposal held for manual review when reviewer risk was high
 ```
 
-Real project dry-run:
+Real package benchmark:
 
 ```text
-Target: datasets==2.14.0 source distribution from PyPI
-156 Python files scanned
-2 files changed
-2 deterministic fixes
-0 AI-review noise after restricting dynamic **kwargs checks
-156 transformed modules compile successfully in memory
+Targets: sentence-transformers==2.2.2, peft==0.4.0, diffusers==0.16.1 source distributions
+315 Python files scanned
+11 files changed
+30 deterministic fixes
+8 AI/manual review findings
+315 transformed modules compile successfully in memory
+0 syntax failures
 ```
 
 Representative real-project diff:
@@ -99,5 +107,6 @@ hf-hub-v1-migrator path/to/repo --report hf-v1-report.json --ai-fallback
 - Low-confidence code is reported instead of rewritten.
 - Deterministic output is idempotent in tests.
 - Golden outputs are compiled with `compile(..., mode="exec")`.
+- `scripts/benchmark_coverage.py` compiles every transformed module in real package dry-runs.
 - Secrets are read from `.env` or environment variables and are excluded from git.
 
